@@ -1,0 +1,25 @@
+css sticky footer 布局
+        <div class="detail-wrapper clearfix">
+          <div class="detail-main">
+          </div>
+        </div>
+        <div class="detail-close" @click="hideDetail">
+          <i class="icon-close"></i>
+        </div>
+
+      .detail-wrapper
+        min-height: 100%
+        width: 100%
+        .detail-main
+          margin-top: 64px
+          padding-bottom: 64px
+      .detail-close
+        position: relative
+        width: 32px
+        height: 32px
+        margin: -64px auto 0 auto
+        clear: both
+        font-size: 32px
+
+多行文字的垂直居中
+display: table
