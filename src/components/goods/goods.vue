@@ -14,7 +14,7 @@
         <li v-for="item in goods" class="food-list food-list-hook">
           <h1 class="title">{{item.name}}</h1>
           <ul>
-            <li v-for="food in item.foods" class="food-item border-1px">
+            <li @click="selectFood(food, $event)" v-for="food in item.foods" class="food-item border-1px">
               <div class="icon">
                 <img width="57" height="57" :src="food.icon">
               </div>
@@ -28,7 +28,8 @@
                   <span class="now">￥{{ food.price }}</span><span v-show="food.oldPrice" class="old">￥{{ food.oldPrice }}</span>
                 </div>
                 <div class="cartcontrol-wrapper">
-                  <!-- <cartcontrol @add="addFood" :food="food"></cartcontrol> -->
+                  <!--父组件可以在使用子组件的地方直接用 v-on 来监听子组件触发的事件，也就是v-on:add-->
+                  <cartcontrol @add="addFood" :food="food"></cartcontrol>
                 </div>
               </div>
             </li>
@@ -36,12 +37,16 @@
         </li>
       </ul>
     </div>
-<!--     <shopcart ref="shopcart" :select-foods="selectFoods" :delivery-price = "seller.deliveryPrice" :min-price="seller.minPrice"></shopcart> -->
+    <shopcart ref="shopcart" :select-foods="selectFoods" :delivery-price = "seller.deliveryPrice" :min-price="seller.minPrice"></shopcart>
+    <food :food="selectedFood" ref="food" @add="addFood"></food>
   </div>
 </template>
 
 <script type="ecmascript-6">
 import BScroll from 'better-scroll'
+import shopcart from '@/components/shopcart/shopcart'
+import cartcontrol from '@/components/cartcontrol/cartcontrol'
+import food from '@/components/food/food'
 const ERR_OK = 0
 export default {
   props: {
@@ -52,21 +57,36 @@ export default {
   data() {
     return {
       goods: [],
-      listHeight: [],
-      scrollY: 0
+      listHeight: [],   // 用来储存foods区域的各个区块的高度(clientHeight)
+      scrollY: 0,       // 用来存储foods区域的滚动的Y坐标
+      selectedFood: {}
     }
   },
   computed: {
-    currentIndex () {
+    currentIndex () {   // 计算到达哪个区域的区间的时候对应的索引值
         for (let i = 0; i < this.listHeight.length; i++) {
-          let height1 = this.listHeight[i]
-          let height2 = this.listHeight[i + 1]
+          let height1 = this.listHeight[i]     // 当前menu子块的高度
+          let height2 = this.listHeight[i + 1]  // 下一个menu子块的高度
+          // 滚动到底部的时候，height2为undefined，height2为undefined，需要考虑这种情况
+          // 需要确定是在两个menu子块的高度区间
           if (!height2 || (this.scrollY >= height1 && this.scrollY < height2)) {
-            return i   // 返回当前在屏幕区域内的index
+            return i   // 返回这个menu子块的索引
           }
         }
         return 0
       },
+      // 用来存储当前已被选择的food数据，对象保存形式
+      selectFoods () {   // 遍历goods数组，将所有food.count不为0的food放到foods并将该数组返回
+        let foods = []
+        this.goods.forEach((good) => {
+          good.foods.forEach((food) => {
+            if (food.count) {
+              foods.push(food)
+            }
+          })
+        })
+        return foods
+      }
   },
   created () {
     this.classMap = ['decrease', 'discount', 'special', 'invoice', 'guarantee']
@@ -74,52 +94,69 @@ export default {
        res = res.data
        if(res.errno == ERR_OK) {
          this.goods = res.data
-         this.$nextTick(() => {
-              this._initScroll()
-              this._calculateHeight()
+         this.$nextTick(() => {  // 使用$nextTick来等待，异步完成之后更新dom
+              this._initScroll() // 绑定滚动dom
+              this._calculateHeight()  // 计算goods区域的每个区域的高度
            })
        }
     })
   },
-    methods: {
-      selectMenu (index) {
-        console.log(index)
-        let foodList = this.$refs.foodswrapper.getElementsByClassName('food-list-hook')
-        let el = foodList[index]
-        this.foodsScroll.scrollToElement(el, 300)
-      },
-      _initScroll () {
-        this.meunScroll = new BScroll(this.$refs.menuwrapper, {
-          click: true
-        })
-        this.foodsScroll = new BScroll(this.$refs.foodswrapper, {
-          probeType: 3,
-          click: true
-        })
-        this.foodsScroll.on('scroll', (pos) => {
-          this.scrollY = Math.abs(Math.round(pos.y))
-        })
-      },
-      _calculateHeight () {
-        let foodList = this.$refs.foodswrapper.getElementsByClassName('food-list-hook')
-        let height = 0
+  methods: {
+    selectMenu (index) {
+      console.log(index)
+      let foodList = this.$refs.foodswrapper.getElementsByClassName('food-list-hook')
+      let el = foodList[index]
+       //类似jump to的功能,通过这个方法,跳转到指定的dom
+      this.foodsScroll.scrollToElement(el, 300)
+    },
+    _initScroll () {   // 初始化scroll区域
+      this.meunScroll = new BScroll(this.$refs.menuwrapper, {
+        click: true  //结合BScroll的接口使用,是否将click事件传递,默认被拦截了
+      })
+      this.foodsScroll = new BScroll(this.$refs.foodswrapper, {
+        probeType: 3,  //结合BScroll的接口使用,3实时派发scroll事件
+        click: true
+      })
+      //结合BScroll的接口使用，监听scroll事件，并获取鼠标坐标
+      this.foodsScroll.on('scroll', (pos) => {
+        this.scrollY = Math.abs(Math.round(pos.y))
+      })
+    },
+    // 计算foods内部块的高度
+    _calculateHeight () {
+      let foodList = this.$refs.foodswrapper.getElementsByClassName('food-list-hook')
+      let height = 0
+      this.listHeight.push(height)  // 初始化第一个高度为0
+      for (let i = 0; i < foodList.length; i++) {
+        let item = foodList[i]  //每一个item都是刚才获取的food的每一个dom
+        height += item.clientHeight   //主要是为了获取每一个foods内部块的高度
         this.listHeight.push(height)
-        for (let i = 0; i < foodList.length; i++) {
-          let item = foodList[i]
-          height += item.clientHeight
-          this.listHeight.push(height)
-        }
-      },
-      addFood (target) {
-        this._drop(target)
-      },
-      _drop (target) {
-        // 体验优化，异步执行下落动画
-        this.$nextTick(() => {
-          this.$refs.shopcart.drop(target)
-        })
       }
     },
+    addFood (target) {
+      console.log("子组件:", target)
+      this._drop(target)
+    },
+    _drop (target) {
+      // 体验优化，异步执行下落动画
+      this.$nextTick(() => {
+        this.$refs.shopcart.drop(target) //调用shopcart组件的下落动画drop函数
+      })
+    },
+    selectFood(food, event) {
+      if(!event._constructed) {
+        return;
+      }
+      this.selectedFood = food
+      this.$refs.food.show()
+
+    }
+  },
+  components: {
+      shopcart,
+      cartcontrol,
+      food
+  }
 }
 </script>
 <style lang="stylus" rel="stylesheet/stylus">

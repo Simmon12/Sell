@@ -15,7 +15,10 @@
       </div>
     </div>
     <div class="content">
-      <router-view :seller="seller"></router-view>
+      <!--主要用于保留组件状态或避免重新渲染。-->
+      <keep-alive>
+        <router-view :seller="seller"></router-view>
+      </keep-alive>
     </div>
 
   </div>
@@ -23,19 +26,27 @@
 
 <script>
 import vHeader from '@/components/header/header'
+import {urlParse} from '@/common/js/util'
 const ERR_OK = 0
 export default {
   data() {
     return {
-      seller: {}
+      seller: {
+        id: (()=> {
+          let queryParam = urlParse()
+          console.log(queryParam)
+          return queryParam.id
+        })()
+      }
     }
   },
   created() {
-    this.$ajax.get('/api/seller').then(res => {
+    this.$ajax.get('/api/seller?id=' + this.seller.id).then(res => {
         console.log(res)
         res = res.data
         if(res.errno === ERR_OK) {
-          this.seller = res.data
+          this.seller = Object.assign({}, this.seller, res.data)
+          console.log("skdjfkj ", this.seller.id)
         }
         console.log("seller",this.seller.name)
     }).catch(err=> {
